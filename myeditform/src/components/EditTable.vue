@@ -1,33 +1,66 @@
 <template>
-  <div class="getChildCenter container">
-    <table>
-      <caption>信息表</caption>
-      <tr style="height: 35px;" class="getChildCenter">
-        <th :key="index" v-for="(data,index) in tableHead">
-          <button type="text" @click="deleteLine(index)">删除</button>
-        </th>
-        <th></th>
-      </tr>
-      <tr class="getChildCenter">
-        <th :key="index" v-for="(data,index) in tableHead">
-          <input type="text" v-model="tableHead[index]">
-        </th>
-        <th>
-          <button :disabled="tableHead.length>=maxTableHead" @click="addTableHead()">新增字段</button>
-          <button @click="addTableData()">新增数据</button>
-        </th>
-      </tr>
-      <tr class="getChildCenter" :key="index" v-for="(data,index) in tableData">
-        <td :key="index" v-for="(tdData,index) in data">
-          <input type="text" v-model="data[index]">
-        </td>
-        <td>
-          <button @click="deleteRow(index)">删除</button>
-        </td>
-      </tr>
-    </table>
-    <!-- <button class="data-out" @click="dataOut()">导出</button>
-    <input @change="dataIn($event)" type="file">-->
+  <div>
+    <div value="first" class="login-box" v-if="!ifLogin">
+      <el-tabs>
+        <el-tab-pane class="container" label="新建表格" name="first">
+          <div style="margin-top:10vh">
+            <span>表格名字:</span>
+            <el-input v-model="newTabName"></el-input>
+          </div>
+          <el-button style="margin-top:5vh" @click="createTabName">新建</el-button>
+        </el-tab-pane>
+        <el-tab-pane class="container" label="连接至已有表格" name="second">
+          <div style="margin-top:10vh">
+            <span>表格名字:</span>
+            <el-input v-model="linkTabName"></el-input>
+          </div>
+          <el-button style="margin-top:5vh" @click="linkTab">连接</el-button>
+        </el-tab-pane>
+      </el-tabs>
+    </div>
+    <div v-else>
+      <el-table :data="tableData">
+        <el-table-column
+          :key="item.prop"
+          :prop="item.prop"
+          :label="item.label"
+          v-for="item in tableHead"
+        >
+          <template slot-scope="scope">
+            <p>{{scope.row[item.prop]}}</p>
+            <input
+              v-if="showEdit[scope.$index]!=undefined&&showEdit[scope.$index]"
+              v-model="scope.row[item.prop]"
+              type="text"
+            >
+          </template>
+        </el-table-column>
+        <el-table-column align="right">
+          <template slot="header">
+            <el-button @click="addHead()"></el-button>
+          </template>
+          <template slot-scope="scope">
+            <el-button size="mini" @click="handleEdit(scope.$index, scope.row)">Edit</el-button>
+            <el-button
+              size="mini"
+              type="danger"
+              @click="handleDelete(scope.$index, scope.row)"
+            >Delete</el-button>
+            <el-button
+              v-if="showEdit[scope.$index]!=undefined&&showEdit[scope.$index]"
+              size="mini"
+              @click="completeEdit(scope.$index, scope.row)"
+            >完成</el-button>
+            <el-button
+              v-if="showEdit[scope.$index]!=undefined&&showEdit[scope.$index]"
+              size="mini"
+              @click="cancelEdit(scope.$index, scope.row)"
+            >取消</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <el-button @click="addRow" style="float:right" type="primary" icon="el-icon-plus" circle></el-button>
+    </div>
   </div>
 </template>
 <script>
@@ -36,140 +69,103 @@ export default {
   name: "EditTable",
   data() {
     return {
-      file: ""
+      file: "",
+      tableHead: [],
+      tableData: [],
+      maxTableHead: 5,
+      mode: "local",
+      propCount: 0,
+      showEdit: [],
+      ifLogin: false,
+      newTabName: '',
+      linkTabName:'',
     };
-  },
-  props: {
-    tableHead: {},
-    tableData: {},
-    maxTableHead: { default: 5 }
   },
   computed: {},
   watch: {
     tableHead: {
-      handler(newval) {
-        //console.log(newval);
-      },
+      handler(newval) {},
       deep: true
     }
   },
+  created: function() {},
   methods: {
-    // dataOut() {
-    //   let headSTR = "";
-    //   for (let i = 0, length = this.tableHead.length; i < length; i++) {
-    //     headSTR = headSTR + this.tableHead[i];
-    //     if (i != length - 1) headSTR = headSTR + ",";
-    //     else headSTR = headSTR + "\n";
-    //   }
-    //   let dataSTR = "";
-    //   for (let i = 0, length = this.tableData.length; i < length; i++) {
-    //     for (let j = 0, jlength = this.tableData[i].length; j < jlength; j++) {
-    //       dataSTR =
-    //         dataSTR + this.tableData[i][j] + (j == jlength - 1 ? "\n" : ",");
-    //     }
-    //   }
-    //   console.log(headSTR + dataSTR);
-    //   let STR = headSTR + dataSTR;
-    //   var blob = new Blob(["\uFEFF" + STR], {
-    //     type: "text/csv;charset=gb2312;",
-    //     endings: "native"
-    //   });
-    //   var a = document.createElement("a");
-    //   a.download = "text.csv";
-    //   a.href = URL.createObjectURL(blob);
-    //   a.click();
-    // },
-    // dataIn(e) {
-    //   const that = this;
-    //   if (!e.target.files[0]) return;
-    //   let file = e.target.files[0];
-    //   let fileReader = new FileReader();
-    //   fileReader.readAsText(file, "gb2312");
-    //   fileReader.onload = e => {
-    //     console.log(e.target.result);
-    //     let result = e.target.result;
-    //     result = result.split("\n").filter(e => e != "");
-    //     that.$emit("update:tableHead", result[0].split(","));
-    //     result.shift();
-    //     result = result.map(element => {
-    //       return element.split(",");
-    //     });
-    //     that.$emit("update:tableData", result);
-    //   };
-    // },
-    addTableHead() {
-      let result = this.tableHead;
-      result.push("");
-      this.$emit("update:tableHead", result);
-      if (this.tableData == []) return;
-      let newTableData = this.tableData;
-      console.log(newTableData);
-      for (let i = 0; i < newTableData.length; i++) {
-        let length = this.tableHead.length - newTableData[i].length;
-        for (let j = 0; j < length; j++) {
-          newTableData[i].push("");
-        }
-      }
-      this.$emit("update:tableData", newTableData);
+    handleEdit(index, row) {
+      this.$set(this.showEdit, index, true);
+      console.log(this.showEdit);
+      console.log(index, row);
     },
-    addTableData() {
-      let newLine = this.tableHead.map(e => "");
-      // let newTableData=this.tableData;
-      this.tableData.push(newLine);
-      //this.$emit("update:tableData",newTableData);
+    handleDelete(index, row) {
+      console.log(index, row);
     },
-    deleteRow(index) {
-      this.tableData.splice(index, 1);
-      //this.$emit("update:tableData",this.tableData.splice(index,1))
+    addHead() {
+      this.propCount++;
+      this.tableHead.push({ prop: this.propCount.toString(), label: "新建列" });
     },
-    deleteLine(index){
-      this.tableHead.splice(index,1)
-      for (let i = 0; i < this.tableData.length; i++) {
-          this.tableData[i].splice(index,1)
-      }
+    addRow() {
+      this.tableData.push({});
+    },
+    completeEdit() {},
+    cancelEdit(index) {
+      this.$set(this.showEdit, index, false);
+    },
+    createTabName() {
+      var that = this;
+      this.$axios
+        .get("/setTabName", {
+          params: { newTabName: that.newTabName }
+        })
+        .then(res => {
+          console.log(res);
+          that.$message({
+            showClose: true,
+            message: res.info,
+            type: "success"
+          });
+        })
+        .catch(err => {
+          console.log(err);
+        });
+    },
+    linkTab(){
+      var that = this;
+      this.$axios
+        .get("/linkTab", {
+          params: { linkTabName: that.linkTabName }
+        })
+        .then(res => {
+          console.log(res);
+          that.$message({
+            showClose: true,
+            message: res.info,
+            type: "success"
+          });
+        })
+        .catch(err => {
+          console.log(err);
+        });
     }
   }
 };
 </script>
 <style scoped>
+.login-box {
+  width: 50vw;
+  height: 60vh;
+  border: 1px solid;
+  margin: 0 auto;
+  margin-top: 5vh;
+}
 .container {
-  flex-direction: column;
-  align-items: center;
-}
-tr {
-  border: 1px solid slategray;
-  display: block;
-  box-sizing: border-box;
-}
-table input {
-  padding: 0px;
-  border: 0px;
-  display: inline-block;
-  width: 90px;
-  height: 70px;
-  text-align: center;
-  box-sizing: border-box;
-}
-th,td{
-  height:70px;
-  width:90px;
-}
-th input {
-  font-weight: bolder;
-  font-size: large;
-}
-th:not(:last-child),
-td:not(:last-child) {
-  border-right: 1px solid slategray;
-}
-.getChildCenter {
   display: flex;
-  flex-wrap: wrap;
   justify-content: center;
+  align-items: center;
+  flex-direction: column;
 }
-button {
-  width: 90px;
-  height: 35px;
-  display: block;
+.login-input-box {
+  width: 40vw;
+  height: 45vh;
+  border: 1px solid;
+  margin-top: 2vh;
 }
 </style>
