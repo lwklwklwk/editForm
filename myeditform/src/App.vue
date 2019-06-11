@@ -38,10 +38,6 @@ export default {
   },
   data() {
     return {
-      tableHead: ["姓名", "性别"],
-      tableData: [["lwk", "男"]],
-      socket: "",
-      mode: "local",
       editableTabsValue: "1",
       editableTabs: [
         {
@@ -62,9 +58,6 @@ export default {
     // });
   },
   methods: {
-    emit: function() {
-      this.socket.emit("sentTH", { TH: this.tableHead, TD: this.tableData });
-    },
     handleTabsEdit(targetName, action) {
       if (action === "add") {
         let newTabName = ++this.tabIndex + "";
@@ -91,6 +84,12 @@ export default {
         this.editableTabsValue = activeName;
         this.editableTabs = tabs.filter(tab => tab.name !== targetName);
       }
+    },
+    changeName(name){
+      this.editableTabs.find(e=>{
+        return e.name==this.editableTabsValue
+      }).title=name
+      
     }
   }
   // watch: {

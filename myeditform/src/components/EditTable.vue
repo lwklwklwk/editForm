@@ -1,20 +1,23 @@
 <template>
   <div>
     <div value="first" class="login-box" v-if="!ifLogin">
-      <el-tabs>
+      <el-tabs v-model="tabsChoose">
         <el-tab-pane class="container" label="新建表格" name="first">
           <div style="margin-top:10vh">
-            <span>表格名字:</span>
+            <span>新建表格名字:</span>
             <el-input v-model="newTabName"></el-input>
           </div>
           <el-button style="margin-top:5vh" @click="createTabName">新建</el-button>
         </el-tab-pane>
         <el-tab-pane class="container" label="连接至已有表格" name="second">
           <div style="margin-top:10vh">
-            <span>表格名字:</span>
+            <span>待连接表格名字:</span>
             <el-input v-model="linkTabName"></el-input>
           </div>
           <el-button style="margin-top:5vh" @click="linkTab">连接</el-button>
+        </el-tab-pane>
+        <el-tab-pane class="container" label="离线模式" name="third">
+          <el-button style="margin-top:5vh" @click="localMode">使用离线模式</el-button>
         </el-tab-pane>
       </el-tabs>
     </div>
@@ -26,18 +29,40 @@
           :label="item.label"
           v-for="item in tableHead"
         >
+          <template slot="header" slot-scope="scope">
+            <div class="head-box">
+              <span>{{scope.column.label}}</span>
+              <el-button
+                class="delete-head"
+                @click="deleteHead(scope.$index)"
+                style="margin-left:20px;"
+                size="mini"
+                type="danger"
+                icon="el-icon-close"
+                circle
+              ></el-button>
+            </div>
+            <el-input
+              v-if="showHeadEdit&&editTableHead[scope.$index]"
+              v-model="editTableHead[scope.$index]['label']"
+              type="text"
+            ></el-input>
+          </template>
           <template slot-scope="scope">
             <p>{{scope.row[item.prop]}}</p>
-            <input
+            <el-input
               v-if="showEdit[scope.$index]!=undefined&&showEdit[scope.$index]"
-              v-model="scope.row[item.prop]"
+              v-model="editTableData[scope.$index][item.prop]"
               type="text"
-            >
+            ></el-input>
           </template>
         </el-table-column>
         <el-table-column align="right">
           <template slot="header">
-            <el-button @click="addHead()"></el-button>
+            <el-button @click="editHead">编辑表头</el-button>
+            <el-button :disabled="showHeadEdit" @click="addHead">添加表头</el-button>
+            <el-button v-if="showHeadEdit" @click="completeEditHead">完成</el-button>
+            <el-button v-if="showHeadEdit" @click="cancelHeadEdit">取消</el-button>
           </template>
           <template slot-scope="scope">
             <el-button size="mini" @click="handleEdit(scope.$index, scope.row)">Edit</el-button>
@@ -70,15 +95,20 @@ export default {
   data() {
     return {
       file: "",
+      tabsChoose: "first",
+      //表格数据
       tableHead: [],
       tableData: [],
-      maxTableHead: 5,
+      //编辑时的临时变量
+      editTableData: [],
+      editTableHead: [],
+      count:1,
       mode: "local",
-      propCount: 0,
       showEdit: [],
+      showHeadEdit: false,
       ifLogin: false,
-      newTabName: '',
-      linkTabName:'',
+      newTabName: "",
+      linkTabName: ""
     };
   },
   computed: {},
@@ -90,25 +120,92 @@ export default {
   },
   created: function() {},
   methods: {
-    handleEdit(index, row) {
-      this.$set(this.showEdit, index, true);
-      console.log(this.showEdit);
-      console.log(index, row);
+    localMode() {
+      this.mode = "local";
+      this.ifLogin = true;
     },
-    handleDelete(index, row) {
-      console.log(index, row);
-    },
+
+    /* 表头相关操作 */
     addHead() {
-      this.propCount++;
-      this.tableHead.push({ prop: this.propCount.toString(), label: "新建列" });
+      if (this.mode != "online") {
+        this.count++;
+        this.tableHead.push({
+          prop: this.count.toString(),
+          label: "新建列"
+        });
+      } else {
+        this.socket.emit("addHead");
+      }
     },
+    deleteHead(index) {
+      if (this.mode != "online") {
+        let prop = this.tableHead[index].prop;
+        console.log(prop);
+        this.tableData.forEach(element => {
+          delete element[prop];
+        });
+        console.log(this.tableData);
+        this.tableHead.splice(index, 1);
+      } else {
+        this.socket.emit("deleteHead", index);
+      }
+    },
+    editHead() {
+      this.showHeadEdit = true;
+      this.editTableHead = JSON.parse(JSON.stringify(this.tableHead));
+    },
+    cancelHeadEdit() {
+      this.showHeadEdit = false;
+    },
+    completeEditHead() {
+      if (this.mode != "online") {
+        this.tableHead = JSON.parse(JSON.stringify(this.editTableHead));
+        this.showHeadEdit = false;
+      } else {
+        this.socket.emit(
+          "editHead",
+          JSON.parse(JSON.stringify(this.editTableHead))
+        );
+        this.showHeadEdit = false;
+      }
+    },
+    /* 表行相关操作 */
     addRow() {
-      this.tableData.push({});
+      if (this.mode != "online") {
+        this.tableData.push({});
+      } else {
+        this.socket.emit("addRow");
+      }
     },
-    completeEdit() {},
+    completeEdit(index, row) {
+      if (this.mode != "online") {
+        console.log('此行修改',this.editTableData[index]);
+        this.tableData[index] = this.editTableData[index];
+        
+      } else {
+        this.socket.emit("editRow", {index:index,data:this.editTableData[index]});
+      }
+      this.$set(this.showEdit, index, false);
+    },
     cancelEdit(index) {
       this.$set(this.showEdit, index, false);
     },
+    handleEdit(index, row) {
+        this.$set(this.showEdit, index, true);
+        this.editTableData = JSON.parse(JSON.stringify(this.tableData));
+    },
+    handleDelete(index, row) {
+      if (this.mode != "online") {
+        this.tableData.splice(index, 1);
+        this.$set(this.showEdit, index, true);
+      }
+      else{
+        this.socket.emit('deleteRow',index);
+      }
+    },
+
+    /*  连接相关 */
+    //创建新表
     createTabName() {
       var that = this;
       this.$axios
@@ -127,7 +224,8 @@ export default {
           console.log(err);
         });
     },
-    linkTab(){
+    //连接至表
+    linkTab() {
       var that = this;
       this.$axios
         .get("/linkTab", {
@@ -140,10 +238,28 @@ export default {
             message: res.info,
             type: "success"
           });
+          that.mode = "online";
+          that.metaToData(res.tableMeta);
+          that.socket = io("http://127.0.0.1:3000");
+          that.socket.emit("setGroup", that.linkTabName);
+          that.socket.on("tableData", msg => {
+            that.metaToData(msg);
+            console.log("收到表格信息", msg);
+          });
+          that.$parent.$parent.$parent.changeName(that.linkTabName);
+          that.socket.on("test", msg => {});
+          that.ifLogin = true;
         })
         .catch(err => {
           console.log(err);
         });
+    },
+
+    /* 工具函数 */
+    metaToData(tableMeta) {
+      //console.log(tableMeta);
+      this.tableHead = tableMeta.tableHead;
+      this.tableData = tableMeta.tableData;
     }
   }
 };
@@ -167,5 +283,11 @@ export default {
   height: 45vh;
   border: 1px solid;
   margin-top: 2vh;
+}
+.delete-head {
+  display: none;
+}
+.head-box:hover .delete-head {
+  display: inline-block;
 }
 </style>
